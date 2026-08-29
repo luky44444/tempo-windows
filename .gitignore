@@ -1,0 +1,7 @@
+# Local scratch builds
+Tempo-ui.exe
+*.pdb
+[Bb]in/
+[Oo]bj/
+*.user
+.vs/

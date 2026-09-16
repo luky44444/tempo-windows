@@ -4,13 +4,25 @@ A small native **Windows** timer, stopwatch, and work-hours tracker. Built as a 
 
 This repo is a public example of desktop UI work: custom drawing, an always-on-top overlay, and local-only persistence.
 
+## Preview
+
+<p align="center">
+  <img src="screenshots/timer.png" alt="Tempo timer" width="420">
+</p>
+
+| Timer / Stopwatch / Work | Settings | Corner overlay |
+| --- | --- | --- |
+| <img src="screenshots/stopwatch.png" alt="Stopwatch" width="260"> | <img src="screenshots/settings.png" alt="Settings" width="260"> | <img src="screenshots/overlay.png" alt="Corner overlay" width="200"> |
+| <img src="screenshots/work.png" alt="Work tracker" width="260"> | | |
+
 ## What it does
 
 - **Timer** — presets or typed minutes/seconds, circular progress ring
 - **Stopwatch** — running time with laps
 - **Work** — session total that saves on this PC; named snapshots in **Saved timers**
 - **Overlay** — a circular always-on-top widget while something is running (snaps to screen corners)
-- **Idle pause** — work mode pauses after 3 minutes with no mouse movement and no playback audio
+- **Settings** — turn idle auto-stop, mouse / keyboard / audio sensors, and the overlay on or off
+- **Idle pause** — work mode can pause after a quiet stretch (mouse, keyboard, or playback audio)
 - **Trim** — knock minutes off a work session if you forgot to pause
 
 Work history stays in `%LocalAppData%\Tempo` on your machine. This repository does not contain timers, session names, or other personal data.

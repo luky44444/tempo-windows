@@ -10,10 +10,17 @@ This repo is a public example of desktop UI work: custom drawing, an always-on-t
   <img src="screenshots/timer.png" alt="Tempo timer" width="420">
 </p>
 
-| Timer / Stopwatch / Work | Settings | Corner overlay |
-| --- | --- | --- |
-| <img src="screenshots/stopwatch.png" alt="Stopwatch" width="260"> | <img src="screenshots/settings.png" alt="Settings" width="260"> | <img src="screenshots/overlay.png" alt="Corner overlay" width="200"> |
-| <img src="screenshots/work.png" alt="Work tracker" width="260"> | | |
+<p align="center">
+  <img src="screenshots/stopwatch.png" alt="Stopwatch" width="260">
+  &nbsp;
+  <img src="screenshots/work.png" alt="Work tracker" width="260">
+</p>
+
+<p align="center">
+  <img src="screenshots/settings.png" alt="Settings" width="260">
+  &nbsp;
+  <img src="screenshots/overlay.png" alt="Corner overlay" width="220">
+</p>
 
 ## What it does
 

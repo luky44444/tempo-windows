@@ -384,6 +384,116 @@ namespace TempoApp
         }
     }
 
+    internal class TempoSwitch : Control
+    {
+        private bool hovered;
+        private bool pressed;
+        private bool on = true;
+
+        public event EventHandler Toggled;
+
+        public bool On
+        {
+            get { return on; }
+            set
+            {
+                if (on == value) return;
+                on = value;
+                Invalidate();
+            }
+        }
+
+        public TempoSwitch()
+        {
+            Cursor = Cursors.Hand;
+            Size = new Size(48, 26);
+            TabStop = true;
+            AccessibleRole = AccessibleRole.CheckButton;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.SupportsTransparentBackColor | ControlStyles.Selectable | ControlStyles.StandardClick, true);
+            BackColor = Color.Transparent;
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            if (!Enabled) return;
+            On = !On;
+            if (Toggled != null) Toggled(this, EventArgs.Empty);
+            base.OnClick(e);
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            hovered = true;
+            Invalidate();
+            base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            hovered = false;
+            Invalidate();
+            base.OnMouseLeave(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs mevent)
+        {
+            if (CanFocus) Focus();
+            pressed = true;
+            Invalidate();
+            base.OnMouseDown(mevent);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs mevent)
+        {
+            pressed = false;
+            Invalidate();
+            base.OnMouseUp(mevent);
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            Invalidate();
+            base.OnEnabledChanged(e);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space))
+            {
+                OnClick(EventArgs.Empty);
+                e.SuppressKeyPress = true;
+            }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            PaintKit.HighQuality(e.Graphics);
+            Rectangle track = new Rectangle(0, 3, Width - 1, Height - 7);
+            using (GraphicsPath path = Shapes.Rounded(track, track.Height / 2))
+            using (SolidBrush fill = new SolidBrush(TrackColor()))
+            using (Pen border = new Pen(Enabled ? Palette.Faint : Color.FromArgb(28, 40, 62), 1f))
+            {
+                e.Graphics.FillPath(fill, path);
+                e.Graphics.DrawPath(border, path);
+            }
+
+            int knob = Height - 8;
+            int x = on ? Width - knob - 3 : 3;
+            if (pressed) x += on ? -1 : 1;
+            Rectangle knobRect = new Rectangle(x, 4, knob, knob);
+            using (SolidBrush knobFill = new SolidBrush(Enabled ? Palette.Ink : Palette.Muted))
+                e.Graphics.FillEllipse(knobFill, knobRect);
+        }
+
+        private Color TrackColor()
+        {
+            if (!Enabled) return Palette.Soft;
+            if (on) return hovered ? Color.FromArgb(110, 255, 240) : Palette.Accent;
+            return hovered ? Color.FromArgb(22, 32, 54) : Palette.Surface;
+        }
+    }
+
     internal class DialControl : Control
     {
         private readonly Label stateLabel;
@@ -801,7 +911,9 @@ namespace TempoApp
 
     internal class WidgetMoonForm : Form
     {
-        public const int SizePx = 32;
+        public const int SizePx = 36;
+        private static readonly Color Shell = Color.FromArgb(8, 12, 22);
+        private static readonly Color Edge = Color.FromArgb(3, 5, 9);
         private readonly bool pauseMoon;
         private bool running = true;
         private bool endArmed;
@@ -818,7 +930,7 @@ namespace TempoApp
             TopMost = true;
             StartPosition = FormStartPosition.Manual;
             ClientSize = new Size(SizePx, SizePx);
-            BackColor = pause ? Palette.Accent : Palette.MoonRed;
+            BackColor = Shell;
             AutoScaleMode = AutoScaleMode.None;
             DoubleBuffered = true;
             Cursor = Cursors.Hand;
@@ -855,7 +967,7 @@ namespace TempoApp
 
         protected override void OnPaintBackground(PaintEventArgs e)
         {
-            e.Graphics.Clear(Color.FromArgb(1, 8, 10, 11));
+            e.Graphics.Clear(Edge);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -864,44 +976,52 @@ namespace TempoApp
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            Color body = pauseMoon
-                ? (hovered ? Color.FromArgb(110, 255, 242) : Palette.Accent)
-                : (endArmed ? Palette.MoonRedHot : hovered ? Color.FromArgb(255, 96, 156) : Palette.MoonRed);
+            Color tint = pauseMoon ? Palette.Accent : Palette.MoonRed;
+            bool lit = hovered || endArmed;
+            if (endArmed) tint = Palette.MoonRedHot;
+
+            // Dark body with a colored rim; hovering (or an armed end) floods the disc.
+            Color body = lit ? tint : Shell;
+            Color icon = lit ? Color.FromArgb(10, 14, 20) : tint;
 
             RectangleF disc = new RectangleF(1.5f, 1.5f, Width - 4f, Height - 4f);
             using (SolidBrush fill = new SolidBrush(body))
                 g.FillEllipse(fill, disc);
-            using (Pen rim = new Pen(Color.FromArgb(hovered || endArmed ? 70 : 36, 255, 255, 255), 1f))
+            using (Pen rim = new Pen(lit ? Color.FromArgb(90, 255, 255, 255) : tint, 1.5f))
                 g.DrawEllipse(rim, disc);
 
-            Color icon = Color.FromArgb(18, 22, 20);
             float cx = Width / 2f;
             float cy = Height / 2f;
-            using (Pen ink = new Pen(icon, 2.2f))
+            using (Pen ink = new Pen(icon, 2.4f))
             {
                 ink.StartCap = LineCap.Round;
                 ink.EndCap = LineCap.Round;
                 ink.LineJoin = LineJoin.Round;
                 if (pauseMoon && running)
                 {
-                    g.DrawLine(ink, cx - 4.5f, cy - 6f, cx - 4.5f, cy + 6f);
-                    g.DrawLine(ink, cx + 4.5f, cy - 6f, cx + 4.5f, cy + 6f);
+                    g.DrawLine(ink, cx - 4f, cy - 6f, cx - 4f, cy + 6f);
+                    g.DrawLine(ink, cx + 4f, cy - 6f, cx + 4f, cy + 6f);
                 }
                 else if (pauseMoon)
                 {
                     PointF[] play = new PointF[]
                     {
-                        new PointF(cx - 5f, cy - 6.5f),
-                        new PointF(cx - 5f, cy + 6.5f),
+                        new PointF(cx - 4.5f, cy - 6.5f),
+                        new PointF(cx - 4.5f, cy + 6.5f),
                         new PointF(cx + 7f, cy)
                     };
                     using (SolidBrush b = new SolidBrush(icon))
                         g.FillPolygon(b, play);
+                    using (Pen outline = new Pen(icon, 1.6f))
+                    {
+                        outline.LineJoin = LineJoin.Round;
+                        g.DrawPolygon(outline, play);
+                    }
                 }
                 else
                 {
-                    g.DrawLine(ink, cx - 5f, cy - 5f, cx + 5f, cy + 5f);
-                    g.DrawLine(ink, cx + 5f, cy - 5f, cx - 5f, cy + 5f);
+                    g.DrawLine(ink, cx - 4.5f, cy - 4.5f, cx + 4.5f, cy + 4.5f);
+                    g.DrawLine(ink, cx + 4.5f, cy - 4.5f, cx - 4.5f, cy + 4.5f);
                 }
             }
         }
@@ -1145,9 +1265,22 @@ namespace TempoApp
             PaintKit.HighQuality(e.Graphics);
             Rectangle ring = CircleBounds();
             ring.Inflate(-5, -5);
-            e.Graphics.DrawEllipse(PaintKit.RingTrack, ring);
-            float sweep = (float)(Math.Max(0.0, Math.Min(1.0, progress)) * 359.5);
-            if (sweep > 0.6f) e.Graphics.DrawArc(PaintKit.RingAccent, ring, -90f, sweep);
+            double clamped = Math.Max(0.0, Math.Min(1.0, progress));
+            if (dock == WidgetDock.Free)
+            {
+                e.Graphics.DrawEllipse(PaintKit.RingTrack, ring);
+                float sweep = (float)(clamped * 359.5);
+                if (sweep > 0.6f) e.Graphics.DrawArc(PaintKit.RingAccent, ring, -90f, sweep);
+            }
+            else
+            {
+                // Only a quarter of the circle is on-screen when docked, so the whole
+                // progress range is mapped onto that visible 90° edge-to-edge.
+                float start = PieStart();
+                e.Graphics.DrawArc(PaintKit.RingTrack, ring, start, 90f);
+                float sweep = (float)(clamped * 90.0);
+                if (sweep > 0.3f) e.Graphics.DrawArc(PaintKit.RingAccent, ring, start, sweep);
+            }
             DrawOverlayTime(e.Graphics);
         }
 
@@ -1495,7 +1628,8 @@ namespace TempoApp
         {
             Point planet = PointToScreen(CircleOrigin());
             float planetR = dock == WidgetDock.Free ? Width / 2f : Width;
-            float orbit = planetR + WidgetMoonForm.SizePx / 2f + 4f;
+            float orbit = planetR + WidgetMoonForm.SizePx / 2f + 3f;
+            float spread = dock == WidgetDock.Free ? 22f : 20f;
             float mid;
             switch (dock)
             {
@@ -1515,8 +1649,8 @@ namespace TempoApp
                     mid = 63f;
                     break;
             }
-            PlaceMoon(pauseMoon, planet, orbit, mid - 22f);
-            PlaceMoon(endMoon, planet, orbit, mid + 22f);
+            PlaceMoon(pauseMoon, planet, orbit, mid - spread);
+            PlaceMoon(endMoon, planet, orbit, mid + spread);
         }
 
         private void PlaceMoon(Form moon, Point planet, float orbit, float degrees)
@@ -1574,6 +1708,9 @@ namespace TempoApp
 
         [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out PointApi point);
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int virtualKey);
 
         [ComImport]
         [Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
@@ -1646,6 +1783,22 @@ namespace TempoApp
             bool moved = point.X != lastCursor.X || point.Y != lastCursor.Y;
             lastCursor = point;
             return moved;
+        }
+
+        public static void RememberKeyboard()
+        {
+            for (int vk = 8; vk <= 254; vk++)
+                GetAsyncKeyState(vk);
+        }
+
+        public static bool KeyboardUsed()
+        {
+            for (int vk = 8; vk <= 254; vk++)
+            {
+                if ((GetAsyncKeyState(vk) & 0x8001) != 0)
+                    return true;
+            }
+            return false;
         }
 
         public static bool SoundPlaying()
@@ -1910,7 +2063,7 @@ namespace TempoApp
 
     internal class TempoForm : Form
     {
-        private enum Mode { Timer, Stopwatch, Work }
+        private enum Mode { Timer, Stopwatch, Work, Settings }
 
         private const int WM_NCLBUTTONDOWN = 0xA1;
         private const int HT_CAPTION = 0x2;
@@ -1929,6 +2082,14 @@ namespace TempoApp
         private readonly TempoButton timerTab;
         private readonly TempoButton stopwatchTab;
         private readonly TempoButton workTab;
+        private readonly TempoButton settingsTab;
+        private readonly Panel settingsPanel;
+        private readonly TempoSwitch idleAutoStopSwitch;
+        private readonly TempoSwitch idleMouseSwitch;
+        private readonly TempoSwitch idleKeyboardSwitch;
+        private readonly TempoSwitch idleSoundSwitch;
+        private readonly TempoSwitch overlaySwitch;
+        private readonly TempoButton[] idleMinuteButtons;
         private readonly DialControl dial;
         private readonly TempoButton primaryButton;
         private readonly TempoButton resetButton;
@@ -1940,9 +2101,11 @@ namespace TempoApp
         private readonly TempoButton lapButton;
         private readonly TempoButton[] presetButtons;
         private readonly Panel presetsPanel;
-        private readonly Panel lapsPanel;
-        private readonly FlowLayoutPanel lapRows;
-        private readonly Label lapsEmpty;
+        private readonly Panel lapChipsPanel;
+        private readonly SoftPanel[] lapChips;
+        private readonly Label[] lapChipTitles;
+        private readonly Label[] lapChipValues;
+        private readonly Label lapsInfoLabel;
         private readonly Label workInfoLabel;
         private readonly CardPanel savedTimersPanel;
         private readonly FlowLayoutPanel savedTimerRows;
@@ -1990,6 +2153,17 @@ namespace TempoApp
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Tempo",
             "sessions.dat");
+        private readonly string settingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Tempo",
+            "settings.dat");
+
+        private bool idleAutoStop = true;
+        private bool idleWatchMouse = true;
+        private bool idleWatchKeyboard = true;
+        private bool idleWatchSound = true;
+        private int idleMinutes = 3;
+        private bool showOverlay = true;
 
         public TempoForm()
         {
@@ -2053,33 +2227,41 @@ namespace TempoApp
             modeSwitch.DrawBorder = true;
             modeSwitch.BorderColor = Palette.Faint;
             modeSwitch.FillColor = Palette.Night;
-            modeSwitch.SetBounds(78, 18, 300, 42);
+            modeSwitch.SetBounds(28, 18, 400, 42);
             card.Controls.Add(modeSwitch);
 
             timerTab = new TempoButton();
             timerTab.Text = "Timer";
             timerTab.Selected = true;
             timerTab.Radius = 8;
-            timerTab.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            timerTab.SetBounds(4, 4, 94, 34);
+            timerTab.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            timerTab.SetBounds(4, 4, 95, 34);
             timerTab.Click += delegate { SwitchMode(Mode.Timer); };
             modeSwitch.Controls.Add(timerTab);
 
             stopwatchTab = new TempoButton();
             stopwatchTab.Text = "Stopwatch";
             stopwatchTab.Radius = 8;
-            stopwatchTab.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            stopwatchTab.SetBounds(103, 4, 94, 34);
+            stopwatchTab.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            stopwatchTab.SetBounds(103, 4, 95, 34);
             stopwatchTab.Click += delegate { SwitchMode(Mode.Stopwatch); };
             modeSwitch.Controls.Add(stopwatchTab);
 
             workTab = new TempoButton();
             workTab.Text = "Work";
             workTab.Radius = 8;
-            workTab.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            workTab.SetBounds(202, 4, 94, 34);
+            workTab.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            workTab.SetBounds(202, 4, 95, 34);
             workTab.Click += delegate { SwitchMode(Mode.Work); };
             modeSwitch.Controls.Add(workTab);
+
+            settingsTab = new TempoButton();
+            settingsTab.Text = "Settings";
+            settingsTab.Radius = 8;
+            settingsTab.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            settingsTab.SetBounds(301, 4, 95, 34);
+            settingsTab.Click += delegate { SwitchMode(Mode.Settings); };
+            modeSwitch.Controls.Add(settingsTab);
 
             dial = new DialControl();
             dial.SetBounds(88, 72, 280, 280);
@@ -2088,7 +2270,7 @@ namespace TempoApp
 
             presetsPanel = new Panel();
             presetsPanel.BackColor = Color.Transparent;
-            presetsPanel.SetBounds(44, 363, 368, 42);
+            presetsPanel.SetBounds(43, 363, 370, 42);
             card.Controls.Add(presetsPanel);
 
             int[] presetMinutes = new int[] { 5, 10, 25, 45 };
@@ -2099,10 +2281,10 @@ namespace TempoApp
                 TempoButton button = new TempoButton();
                 button.Text = minutes + " min";
                 button.Tag = minutes;
-            button.Radius = 8;
+                button.Radius = 8;
                 button.Selected = minutes == 25;
                 button.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-                button.SetBounds(5 + i * 92, 4, 82, 34);
+                button.SetBounds(i * 94, 4, 88, 34);
                 button.Click += PresetClicked;
                 presetsPanel.Controls.Add(button);
                 presetButtons[i] = button;
@@ -2129,7 +2311,7 @@ namespace TempoApp
             saveWorkButton.Text = "Save";
             saveWorkButton.Radius = 8;
             saveWorkButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            saveWorkButton.SetBounds(219, 420, 88, 48);
+            saveWorkButton.SetBounds(223, 420, 84, 48);
             saveWorkButton.Visible = false;
             saveWorkButton.Enabled = false;
             saveWorkButton.Click += delegate { SaveCurrentWorkTimer(); };
@@ -2138,16 +2320,19 @@ namespace TempoApp
             trimWorkButton = new TempoButton();
             trimWorkButton.Text = "−";
             trimWorkButton.Radius = 8;
-            trimWorkButton.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+            trimWorkButton.Font = new Font("Segoe UI", 13f, FontStyle.Bold);
             trimWorkButton.AccessibleName = "Lower work time";
-            trimWorkButton.SetBounds(8, 428, 28, 32);
+            trimWorkButton.SetBounds(43, 420, 44, 48);
             trimWorkButton.Visible = false;
             trimWorkButton.Click += delegate { ToggleTrimBar(); };
             card.Controls.Add(trimWorkButton);
 
             trimBar = new SoftPanel();
             trimBar.Radius = 8;
-            trimBar.SetBounds(44, 358, 368, 48);
+            trimBar.DrawBorder = true;
+            trimBar.BorderColor = Palette.Faint;
+            trimBar.FillColor = Palette.Night;
+            trimBar.SetBounds(43, 363, 370, 42);
             trimBar.Visible = false;
             card.Controls.Add(trimBar);
 
@@ -2161,7 +2346,7 @@ namespace TempoApp
                 button.Tag = minutes;
                 button.Radius = 8;
                 button.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-                button.SetBounds(8 + i * 72, 7, 66, 34);
+                button.SetBounds(4 + i * 72, 4, 68, 34);
                 button.Click += TrimWorkClicked;
                 trimBar.Controls.Add(button);
                 trimButtons[i] = button;
@@ -2170,7 +2355,7 @@ namespace TempoApp
             trimDone.Text = "Done";
             trimDone.Radius = 8;
             trimDone.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            trimDone.SetBounds(296, 7, 64, 34);
+            trimDone.SetBounds(296, 4, 70, 34);
             trimDone.Click += delegate { ShowTrimBar(false); };
             trimBar.Controls.Add(trimDone);
 
@@ -2178,7 +2363,7 @@ namespace TempoApp
             lapButton.Text = "Lap";
             lapButton.Radius = 8;
             lapButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            lapButton.SetBounds(233, 420, 88, 48);
+            lapButton.SetBounds(219, 420, 88, 48);
             lapButton.Visible = false;
             lapButton.Enabled = false;
             lapButton.Click += delegate { AddLap(); };
@@ -2192,25 +2377,49 @@ namespace TempoApp
             resetButton.Click += delegate { ResetCurrent(); };
             card.Controls.Add(resetButton);
 
-            lapsPanel = new Panel();
-            lapsPanel.BackColor = Color.Transparent;
-            lapsPanel.SetBounds(45, 476, 366, 52);
-            lapsPanel.Visible = false;
-            card.Controls.Add(lapsPanel);
+            // Stopwatch laps live in the same slot as timer presets: the four most
+            // recent laps as chips, oldest on the left, newest on the right.
+            lapChipsPanel = new Panel();
+            lapChipsPanel.BackColor = Color.Transparent;
+            lapChipsPanel.SetBounds(43, 363, 370, 42);
+            lapChipsPanel.Visible = false;
+            card.Controls.Add(lapChipsPanel);
 
-            lapsEmpty = MakeLabel("Your laps will appear here", 8.5f, FontStyle.Regular, Palette.Muted);
-            lapsEmpty.TextAlign = ContentAlignment.MiddleCenter;
-            lapsEmpty.Dock = DockStyle.Fill;
-            lapsPanel.Controls.Add(lapsEmpty);
+            lapChips = new SoftPanel[4];
+            lapChipTitles = new Label[4];
+            lapChipValues = new Label[4];
+            for (int i = 0; i < lapChips.Length; i++)
+            {
+                SoftPanel chip = new SoftPanel();
+                chip.Radius = 8;
+                chip.DrawBorder = true;
+                chip.BorderColor = Palette.Faint;
+                chip.FillColor = Palette.Surface;
+                chip.SetBounds(i * 94, 4, 88, 34);
+                chip.Visible = false;
+                lapChipsPanel.Controls.Add(chip);
+                lapChips[i] = chip;
 
-            lapRows = new FlowLayoutPanel();
-            lapRows.FlowDirection = FlowDirection.TopDown;
-            lapRows.WrapContents = false;
-            lapRows.AutoScroll = true;
-            lapRows.BackColor = Color.Transparent;
-            lapRows.Dock = DockStyle.Fill;
-            lapRows.Visible = false;
-            lapsPanel.Controls.Add(lapRows);
+                Label title = MakeLabel("LAP 1", 6.5f, FontStyle.Bold, Palette.Muted);
+                title.TextAlign = ContentAlignment.MiddleCenter;
+                title.SetBounds(0, 3, 88, 11);
+                chip.Controls.Add(title);
+                lapChipTitles[i] = title;
+
+                Label value = MakeLabel("00:00.00", 8.5f, FontStyle.Bold, Palette.Ink);
+                value.Font = new Font("Consolas", 8.5f, FontStyle.Bold, GraphicsUnit.Point);
+                value.TextAlign = ContentAlignment.MiddleCenter;
+                value.SetBounds(0, 14, 88, 18);
+                chip.Controls.Add(value);
+                lapChipValues[i] = value;
+            }
+
+            lapsInfoLabel = MakeLabel("Press L or Lap while running to split", 8.5f, FontStyle.Regular, Palette.Muted);
+            lapsInfoLabel.TextAlign = ContentAlignment.MiddleCenter;
+            lapsInfoLabel.AutoEllipsis = true;
+            lapsInfoLabel.SetBounds(45, 484, 366, 28);
+            lapsInfoLabel.Visible = false;
+            card.Controls.Add(lapsInfoLabel);
 
             workInfoLabel = MakeLabel("Saved automatically on this PC", 8.5f, FontStyle.Regular, Palette.Muted);
             workInfoLabel.TextAlign = ContentAlignment.MiddleCenter;
@@ -2218,6 +2427,70 @@ namespace TempoApp
             workInfoLabel.SetBounds(45, 484, 366, 28);
             workInfoLabel.Visible = false;
             card.Controls.Add(workInfoLabel);
+
+            settingsPanel = new Panel();
+            settingsPanel.BackColor = Color.Transparent;
+            settingsPanel.SetBounds(28, 72, 400, 448);
+            settingsPanel.Visible = false;
+            card.Controls.Add(settingsPanel);
+
+            Label settingsHeading = MakeLabel("Features", 16f, FontStyle.Bold, Palette.Ink);
+            settingsHeading.SetBounds(4, 0, 392, 28);
+            settingsPanel.Controls.Add(settingsHeading);
+
+            Label settingsHelper = MakeLabel("Turn automatic helpers on or off. Changes save on this PC.", 8.5f, FontStyle.Regular, Palette.Muted);
+            settingsHelper.SetBounds(4, 28, 392, 22);
+            settingsPanel.Controls.Add(settingsHelper);
+
+            idleAutoStopSwitch = new TempoSwitch();
+            idleMouseSwitch = new TempoSwitch();
+            idleKeyboardSwitch = new TempoSwitch();
+            idleSoundSwitch = new TempoSwitch();
+            overlaySwitch = new TempoSwitch();
+            idleAutoStopSwitch.Toggled += delegate { SetIdleAutoStop(idleAutoStopSwitch.On); };
+            idleMouseSwitch.Toggled += delegate { SetIdleWatchMouse(idleMouseSwitch.On); };
+            idleKeyboardSwitch.Toggled += delegate { SetIdleWatchKeyboard(idleKeyboardSwitch.On); };
+            idleSoundSwitch.Toggled += delegate { SetIdleWatchSound(idleSoundSwitch.On); };
+            overlaySwitch.Toggled += delegate { SetShowOverlay(overlaySwitch.On); };
+
+            settingsPanel.Controls.Add(MakeSettingRow("Auto-stop idle work", "Pause Work after a quiet stretch so you can trim it.", idleAutoStopSwitch, 52));
+            settingsPanel.Controls.Add(MakeSettingRow("Watch mouse", "Mouse movement counts as still working.", idleMouseSwitch, 118));
+            settingsPanel.Controls.Add(MakeSettingRow("Watch keyboard", "Typing or shortcut keys count as still working.", idleKeyboardSwitch, 184));
+            settingsPanel.Controls.Add(MakeSettingRow("Watch playback audio", "Sound from speakers counts as still working.", idleSoundSwitch, 250));
+
+            SoftPanel timeoutRow = new SoftPanel();
+            timeoutRow.Radius = 10;
+            timeoutRow.DrawBorder = true;
+            timeoutRow.FillColor = Palette.Surface;
+            timeoutRow.SetBounds(0, 316, 400, 64);
+            settingsPanel.Controls.Add(timeoutRow);
+
+            Label timeoutTitle = MakeLabel("Idle timeout", 10f, FontStyle.Bold, Palette.Ink);
+            timeoutTitle.SetBounds(16, 10, 200, 22);
+            timeoutRow.Controls.Add(timeoutTitle);
+
+            Label timeoutHint = MakeLabel("Quiet time before pausing.", 8f, FontStyle.Regular, Palette.Muted);
+            timeoutHint.AutoEllipsis = true;
+            timeoutHint.SetBounds(16, 32, 148, 22);
+            timeoutRow.Controls.Add(timeoutHint);
+
+            int[] idleChoices = new int[] { 1, 3, 5, 10 };
+            idleMinuteButtons = new TempoButton[idleChoices.Length];
+            for (int i = 0; i < idleChoices.Length; i++)
+            {
+                int minutes = idleChoices[i];
+                TempoButton button = new TempoButton();
+                button.Text = minutes + "m";
+                button.Tag = minutes;
+                button.Radius = 8;
+                button.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+                button.SetBounds(168 + i * 54, 14, 48, 36);
+                button.Click += IdleTimeoutClicked;
+                timeoutRow.Controls.Add(button);
+                idleMinuteButtons[i] = button;
+            }
+
+            settingsPanel.Controls.Add(MakeSettingRow("Desktop overlay", "Show the circular widget while a clock is running.", overlaySwitch, 384));
 
             savedTimersPanel = new CardPanel();
             savedTimersPanel.SetBounds(32, 148, 456, 536);
@@ -2291,6 +2564,7 @@ namespace TempoApp
             widget = new WidgetForm(this);
             widget.PauseRequested += delegate { OverlayPause(); };
             widget.EndRequested += delegate { OverlayEnd(); };
+            LoadSettings();
             LoadSavedTimers();
             LoadSessions();
             LoadWorkState();
@@ -2465,6 +2739,28 @@ namespace TempoApp
             if (timer != null) timer.Elapsed = CalculateSavedTimerTotal(timer, false);
         }
 
+        private Panel MakeSettingRow(string title, string hint, TempoSwitch toggle, int y)
+        {
+            SoftPanel row = new SoftPanel();
+            row.Radius = 10;
+            row.DrawBorder = true;
+            row.FillColor = Palette.Surface;
+            row.SetBounds(0, y, 400, 64);
+
+            Label heading = MakeLabel(title, 10f, FontStyle.Bold, Palette.Ink);
+            heading.SetBounds(16, 8, 310, 22);
+            row.Controls.Add(heading);
+
+            Label helper = MakeLabel(hint, 8f, FontStyle.Regular, Palette.Muted);
+            helper.AutoEllipsis = true;
+            helper.SetBounds(16, 32, 310, 22);
+            row.Controls.Add(helper);
+
+            toggle.SetBounds(336, 19, 48, 26);
+            row.Controls.Add(toggle);
+            return row;
+        }
+
         private void LoadWorkState()
         {
             try
@@ -2533,6 +2829,145 @@ namespace TempoApp
             {
                 // Timing remains usable even if Windows temporarily blocks storage.
             }
+        }
+
+        private void LoadSettings()
+        {
+            try
+            {
+                if (File.Exists(settingsPath))
+                {
+                    string[] lines = File.ReadAllLines(settingsPath);
+                    for (int i = 0; i < lines.Length; i++)
+                    {
+                        string line = lines[i].Trim();
+                        int split = line.IndexOf('=');
+                        if (split <= 0) continue;
+                        string key = line.Substring(0, split).Trim();
+                        string value = line.Substring(split + 1).Trim();
+                        if (key == "idleAutoStop") idleAutoStop = value != "0";
+                        else if (key == "idleWatchMouse") idleWatchMouse = value != "0";
+                        else if (key == "idleWatchKeyboard") idleWatchKeyboard = value != "0";
+                        else if (key == "idleWatchSound") idleWatchSound = value != "0";
+                        else if (key == "showOverlay") showOverlay = value != "0";
+                        else if (key == "idleMinutes")
+                        {
+                            int minutes;
+                            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out minutes)
+                                && (minutes == 1 || minutes == 3 || minutes == 5 || minutes == 10))
+                                idleMinutes = minutes;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                idleAutoStop = true;
+                idleWatchMouse = true;
+                idleWatchKeyboard = true;
+                idleWatchSound = true;
+                idleMinutes = 3;
+                showOverlay = true;
+            }
+            ApplySettingsUi();
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                string folder = Path.GetDirectoryName(settingsPath);
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                File.WriteAllText(settingsPath,
+                    "idleAutoStop=" + (idleAutoStop ? "1" : "0") + "\r\n"
+                    + "idleWatchMouse=" + (idleWatchMouse ? "1" : "0") + "\r\n"
+                    + "idleWatchKeyboard=" + (idleWatchKeyboard ? "1" : "0") + "\r\n"
+                    + "idleWatchSound=" + (idleWatchSound ? "1" : "0") + "\r\n"
+                    + "idleMinutes=" + idleMinutes.ToString(CultureInfo.InvariantCulture) + "\r\n"
+                    + "showOverlay=" + (showOverlay ? "1" : "0") + "\r\n");
+            }
+            catch
+            {
+            }
+        }
+
+        private void ApplySettingsUi()
+        {
+            idleAutoStopSwitch.On = idleAutoStop;
+            idleMouseSwitch.On = idleWatchMouse;
+            idleKeyboardSwitch.On = idleWatchKeyboard;
+            idleSoundSwitch.On = idleWatchSound;
+            overlaySwitch.On = showOverlay;
+            idleMouseSwitch.Enabled = idleAutoStop;
+            idleKeyboardSwitch.Enabled = idleAutoStop;
+            idleSoundSwitch.Enabled = idleAutoStop;
+            for (int i = 0; i < idleMinuteButtons.Length; i++)
+            {
+                idleMinuteButtons[i].Enabled = idleAutoStop;
+                idleMinuteButtons[i].Selected = (int)idleMinuteButtons[i].Tag == idleMinutes;
+                idleMinuteButtons[i].Invalidate();
+            }
+        }
+
+        private void SetIdleAutoStop(bool value)
+        {
+            idleAutoStop = value;
+            if (!idleAutoStop) workIdleStopped = false;
+            ApplySettingsUi();
+            SaveSettings();
+            UpdateInterface();
+        }
+
+        private void SetIdleWatchMouse(bool value)
+        {
+            idleWatchMouse = value;
+            ApplySettingsUi();
+            SaveSettings();
+        }
+
+        private void SetIdleWatchKeyboard(bool value)
+        {
+            idleWatchKeyboard = value;
+            ApplySettingsUi();
+            SaveSettings();
+        }
+
+        private void SetIdleWatchSound(bool value)
+        {
+            idleWatchSound = value;
+            ApplySettingsUi();
+            SaveSettings();
+        }
+
+        private void SetShowOverlay(bool value)
+        {
+            showOverlay = value;
+            ApplySettingsUi();
+            SaveSettings();
+            UpdateInterface();
+        }
+
+        private void IdleTimeoutClicked(object sender, EventArgs e)
+        {
+            if (!idleAutoStop) return;
+            TempoButton clicked = (TempoButton)sender;
+            idleMinutes = (int)clicked.Tag;
+            ApplySettingsUi();
+            SaveSettings();
+        }
+
+        private string IdlePauseReason()
+        {
+            List<string> parts = new List<string>();
+            if (idleWatchMouse) parts.Add("mouse");
+            if (idleWatchKeyboard) parts.Add("keyboard");
+            if (idleWatchSound) parts.Add("sound");
+            string sensors;
+            if (parts.Count == 0) sensors = "activity";
+            else if (parts.Count == 1) sensors = parts[0];
+            else if (parts.Count == 2) sensors = parts[0] + " or " + parts[1];
+            else sensors = parts[0] + ", " + parts[1] + ", or " + parts[2];
+            return "No " + sensors + " for " + idleMinutes + " min — timer paused";
         }
 
         private void StopAndSaveWork()
@@ -3097,35 +3532,45 @@ namespace TempoApp
             timerTab.Selected = mode == Mode.Timer;
             stopwatchTab.Selected = mode == Mode.Stopwatch;
             workTab.Selected = mode == Mode.Work;
+            settingsTab.Selected = mode == Mode.Settings;
             timerTab.Invalidate();
             stopwatchTab.Invalidate();
             workTab.Invalidate();
+            settingsTab.Invalidate();
+            bool clockMode = mode != Mode.Settings;
+            settingsPanel.Visible = mode == Mode.Settings;
+            dial.Visible = clockMode;
+            primaryButton.Visible = clockMode;
+            resetButton.Visible = clockMode;
             presetsPanel.Visible = mode == Mode.Timer;
             addMinuteButton.Visible = mode == Mode.Timer;
             saveWorkButton.Visible = mode == Mode.Work;
             trimWorkButton.Visible = mode == Mode.Work;
             if (mode != Mode.Work) ShowTrimBar(false);
-            lapsPanel.Visible = mode == Mode.Stopwatch;
+            lapChipsPanel.Visible = mode == Mode.Stopwatch;
+            lapsInfoLabel.Visible = mode == Mode.Stopwatch;
             lapButton.Visible = mode == Mode.Stopwatch;
             workInfoLabel.Visible = mode == Mode.Work;
 
+            resetButton.SetBounds(317, 420, 96, 48);
             if (mode == Mode.Timer)
             {
                 primaryButton.SetBounds(43, 420, 166, 48);
-                resetButton.SetBounds(317, 420, 96, 48);
                 shortcutLabel.Text = "SPACE  start / pause     R  reset";
             }
             else if (mode == Mode.Stopwatch)
             {
-                primaryButton.SetBounds(43, 420, 180, 48);
-                resetButton.SetBounds(331, 420, 82, 48);
+                primaryButton.SetBounds(43, 420, 166, 48);
                 shortcutLabel.Text = "SPACE  start / pause     L  lap     R  reset";
+            }
+            else if (mode == Mode.Work)
+            {
+                primaryButton.SetBounds(97, 420, 116, 48);
+                shortcutLabel.Text = "SPACE  start / pause     R  reset";
             }
             else
             {
-                primaryButton.SetBounds(43, 420, 166, 48);
-                resetButton.SetBounds(317, 420, 96, 48);
-                shortcutLabel.Text = "SPACE  start / pause     R  reset     AUTO-SAVED";
+                shortcutLabel.Text = "Idle pause, sensors, overlay";
             }
             UpdateInterface();
         }
@@ -3186,7 +3631,7 @@ namespace TempoApp
         {
             if (mode == Mode.Timer) ToggleTimer();
             else if (mode == Mode.Stopwatch) ToggleStopwatch();
-            else ToggleWork();
+            else if (mode == Mode.Work) ToggleWork();
         }
 
         private void ToggleTimer()
@@ -3232,6 +3677,7 @@ namespace TempoApp
                 workIdleStopped = false;
                 workIdleSince = DateTime.UtcNow;
                 WorkIdle.RememberCursor();
+                WorkIdle.RememberKeyboard();
                 workSession.Restart();
                 nextWorkAutoSave = DateTime.UtcNow.AddSeconds(15);
             }
@@ -3260,6 +3706,8 @@ namespace TempoApp
         {
             if (trimBar.Visible == show) return;
             trimBar.Visible = show;
+            trimWorkButton.Selected = show;
+            trimWorkButton.Invalidate();
             if (show) RefreshTrimButtons();
         }
 
@@ -3288,6 +3736,7 @@ namespace TempoApp
                 workSession.Restart();
                 workIdleSince = DateTime.UtcNow;
                 WorkIdle.RememberCursor();
+                WorkIdle.RememberKeyboard();
             }
             if (amount > workAccumulated) amount = workAccumulated;
             workAccumulated -= amount;
@@ -3298,6 +3747,7 @@ namespace TempoApp
 
         private void ResetCurrent()
         {
+            if (mode == Mode.Settings) return;
             if (mode == Mode.Timer)
             {
                 timerRunning = false;
@@ -3371,34 +3821,36 @@ namespace TempoApp
 
         private void RebuildLaps()
         {
-            while (lapRows.Controls.Count > 0)
-            {
-                Control old = lapRows.Controls[0];
-                lapRows.Controls.RemoveAt(0);
-                old.Dispose();
-            }
-            lapRows.Visible = laps.Count > 0;
-            lapsEmpty.Visible = laps.Count == 0;
-
-            for (int i = laps.Count - 1; i >= 0; i--)
+            int shown = Math.Min(lapChips.Length, laps.Count);
+            int first = laps.Count - shown;
+            TimeSpan best = TimeSpan.MaxValue;
+            TimeSpan last = TimeSpan.Zero;
+            for (int i = 0; i < laps.Count; i++)
             {
                 TimeSpan split = laps[i] - (i > 0 ? laps[i - 1] : TimeSpan.Zero);
-                Panel row = new Panel();
-                row.BackColor = Color.Transparent;
-                row.Margin = new Padding(0);
-                row.Size = new Size(348, 28);
-
-                Label number = MakeLabel("Lap " + (i + 1).ToString("00"), 8.5f, FontStyle.Regular, Palette.Muted);
-                number.SetBounds(4, 2, 100, 24);
-                row.Controls.Add(number);
-
-                Label value = MakeLabel(DialControl.FormatLap(split), 9f, FontStyle.Bold, Palette.Ink);
-                value.Font = new Font("Consolas", 9f, FontStyle.Bold);
-                value.TextAlign = ContentAlignment.MiddleRight;
-                value.SetBounds(220, 2, 120, 24);
-                row.Controls.Add(value);
-                lapRows.Controls.Add(row);
+                if (split < best) best = split;
+                if (i == laps.Count - 1) last = split;
             }
+
+            for (int slot = 0; slot < lapChips.Length; slot++)
+            {
+                int index = first + slot;
+                bool visible = slot < shown;
+                if (lapChips[slot].Visible != visible) lapChips[slot].Visible = visible;
+                if (!visible) continue;
+                TimeSpan split = laps[index] - (index > 0 ? laps[index - 1] : TimeSpan.Zero);
+                bool isBest = laps.Count > 1 && split == best;
+                Ui.SetText(lapChipTitles[slot], "LAP " + (index + 1));
+                Ui.SetText(lapChipValues[slot], DialControl.FormatLap(split));
+                Ui.SetColor(lapChipValues[slot], isBest ? Palette.Accent : Palette.Ink);
+            }
+
+            if (laps.Count == 0)
+                Ui.SetText(lapsInfoLabel, "Press L or Lap while running to split");
+            else if (laps.Count == 1)
+                Ui.SetText(lapsInfoLabel, "1 lap  ·  " + DialControl.FormatLap(last));
+            else
+                Ui.SetText(lapsInfoLabel, laps.Count + " laps  ·  best " + DialControl.FormatLap(best) + "  ·  last " + DialControl.FormatLap(last));
         }
 
         private bool AnythingRunning
@@ -3438,12 +3890,15 @@ namespace TempoApp
                 PersistWorkProgress(savedTimersOpen);
                 nextWorkAutoSave = DateTime.UtcNow.AddSeconds(15);
             }
-            if (workSession.IsRunning)
+            if (workSession.IsRunning && idleAutoStop && (idleWatchMouse || idleWatchKeyboard || idleWatchSound))
             {
-                if (WorkIdle.MouseMoved() || WorkIdle.SoundPlaying())
+                bool active = (idleWatchMouse && WorkIdle.MouseMoved())
+                    || (idleWatchKeyboard && WorkIdle.KeyboardUsed())
+                    || (idleWatchSound && WorkIdle.SoundPlaying());
+                if (active)
                     workIdleSince = DateTime.UtcNow;
                 else if (workIdleSince != DateTime.MinValue
-                    && DateTime.UtcNow - workIdleSince >= TimeSpan.FromMinutes(3))
+                    && DateTime.UtcNow - workIdleSince >= TimeSpan.FromMinutes(idleMinutes))
                     PauseWorkFromIdle();
             }
             UpdateInterface();
@@ -3452,6 +3907,14 @@ namespace TempoApp
 
         private void UpdateInterface()
         {
+            if (mode == Mode.Settings)
+            {
+                Ui.SetText(liveStatus, "●  Settings");
+                Ui.SetColor(liveStatus, Palette.Muted);
+                UpdateWidget();
+                SyncTicker();
+                return;
+            }
             if (mode == Mode.Timer)
             {
                 dial.ShowTimer(timerRemaining, timerDuration, timerRunning, timerHasStarted && !timerRunning, timerComplete);
@@ -3487,8 +3950,10 @@ namespace TempoApp
                 trimWorkButton.Visible = mode == Mode.Work;
                 trimWorkButton.Enabled = totalWork > TimeSpan.Zero;
                 if (trimBar.Visible) RefreshTrimButtons();
-                int primaryWidth = active != null ? 264 : 166;
-                if (primaryButton.Width != primaryWidth) primaryButton.SetBounds(43, 420, primaryWidth, 48);
+                // Row: [−][primary][Save?][New work / Reset]. Save only exists before
+                // the work has been named, so the primary button stretches when it's gone.
+                int primaryWidth = active != null ? 210 : 116;
+                if (primaryButton.Width != primaryWidth) primaryButton.SetBounds(97, 420, primaryWidth, 48);
                 Ui.SetText(resetButton, active != null ? "New work" : "Reset");
                 resetButton.Enabled = true;
                 if (workIdleStopped)
@@ -3503,7 +3968,7 @@ namespace TempoApp
                 }
                 if (workIdleStopped)
                 {
-                    Ui.SetText(workInfoLabel, "No mouse or sound for 3 min — timer paused");
+                    Ui.SetText(workInfoLabel, IdlePauseReason());
                     Ui.SetColor(workInfoLabel, Palette.DangerText);
                 }
                 else if (active != null)
@@ -3519,7 +3984,7 @@ namespace TempoApp
                 {
                     Ui.SetText(workInfoLabel, "Saved automatically on this PC");
                     Ui.SetColor(workInfoLabel, Palette.Muted);
-                    Ui.SetText(shortcutLabel, "SPACE  start / pause     R  reset     AUTO-SAVED");
+                    Ui.SetText(shortcutLabel, "SPACE  start / pause     R  reset");
                 }
             }
             UpdateWidget();
@@ -3528,6 +3993,11 @@ namespace TempoApp
 
         private void UpdateWidget()
         {
+            if (!showOverlay)
+            {
+                widget.HideWidget();
+                return;
+            }
             bool timerLive = timerRunning || timerHasStarted || timerComplete;
             bool swLive = stopwatch.IsRunning || stopwatch.Elapsed > TimeSpan.Zero;
             bool workLive = workSession.IsRunning || CurrentWorkTime > TimeSpan.Zero;
@@ -3562,6 +4032,7 @@ namespace TempoApp
                 return;
             }
             if (ActiveControl is TextBox) return;
+            if (mode == Mode.Settings) return;
             if (e.KeyCode == Keys.Space)
             {
                 PrimaryClicked(this, EventArgs.Empty);

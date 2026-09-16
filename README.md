@@ -36,11 +36,7 @@ Work history stays in `%LocalAppData%\Tempo` on your machine. This repository do
 
 ## Run
 
-Use the included `Tempo.exe` on Windows, or build from source:
-
-```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /optimize+ /target:winexe /out:Tempo.exe /win32icon:Tempo.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.dll Tempo.cs
-```
+Download or clone the repo and open `Tempo.exe` on Windows.
 
 Needs a current Windows install (includes .NET Framework 4.x).
 
